@@ -13,6 +13,7 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WRITE_USER_DICTIONARY" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application android:label="@string/english_ime_name"
             android:name="helium314.keyboard.latin.App"
@@ -62,25 +63,23 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
             </intent-filter>
         </activity>
 
-        <!-- separate activity that's used internally, only necessary in case the launcher icon is disabled on Android < 10 -->
         <activity android:name="helium314.keyboard.settings.SettingsActivity2"
             android:theme="@style/platformActivityTheme"
             android:icon="@mipmap/ic_launcher"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">
-            <!-- intent filter for opening .dict files -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:mimeType="application/octet-stream" android:scheme="content" android:host="*" android:pathPattern=".*\\.dict" />
+                <data android:mimeType="application/octet-stream" android:scheme="content" android:host="*" android:pathPattern=".*\.dict" />
             </intent-filter>
         </activity>
 
         <activity android:name=".spellcheck.SpellCheckerSettingsActivity"
-                android:theme="@style/platformActivityTheme"
-                android:label="@string/spell_checker_service_name"
-                android:exported="true">
+                 android:theme="@style/platformActivityTheme"
+                 android:label="@string/spell_checker_service_name"
+                 android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
             </intent-filter>
@@ -91,8 +90,7 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
             android:windowSoftInputMode="adjustResize|stateAlwaysVisible" android:configChanges="orientation|screenSize"/>
 
         <!-- Broadcast receivers -->
-        <receiver android:name="SystemBroadcastReceiver"
-                android:exported="true">
+        <receiver android:name="SystemBroadcastReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -108,38 +106,21 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
             </intent-filter>
         </receiver>
 
-        <!-- for pasting files from internal clipboard -->
         <provider android:name="helium314.keyboard.latin.database.ClipboardContentProvider"
             android:authorities="@string/clipboard_provider_authority"
-            android:enabled="true"
-            android:grantUriPermissions="true"
-            android:exported="false">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/clipboard_provider_path"/>
+            android:enabled="true" android:grantUriPermissions="true" android:exported="false">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/clipboard_provider_path"/>
         </provider>
 
-        <!-- necessary for sending mail attachments, remove when data gathering phase is done (end of 2026 latest) -->
         <provider android:name="helium314.keyboard.settings.screens.gesturedata.GestureFileProvider"
             android:authorities="@string/gesture_data_provider_authority"
-            android:enabled="true"
-            android:grantUriPermissions="true"
-            android:exported="false">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/gesture_data_path"/>
+            android:enabled="true" android:grantUriPermissions="true" android:exported="false">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/gesture_data_path"/>
         </provider>
     </application>
 
     <queries>
-        <!-- To detect other IMEs -->
-        <intent>
-            <!-- changed to * as it's supposed to help with finding other keyboard apps, see https://github.com/HeliBorg/HeliBoard/issues/1340 -->
-            <!--<action android:name="android.view.InputMethod" />-->
-            <action android:name="*" />
-        </intent>
-
-        <!-- To detect names of installed apps -->
+        <intent><action android:name="*" /></intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
