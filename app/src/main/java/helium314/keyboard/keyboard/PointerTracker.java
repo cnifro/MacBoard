@@ -173,6 +173,10 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
 
     // Touchpad mode for cursor control
     private final TouchpadHandler mTouchpadHandler = new TouchpadHandler();
+    
+    // --- التعديل الأول: متغير وضع المؤشر ---
+    private boolean mSpaceTouchpadMode = false;
+    // ----------------------------------------
 
     private final BatchInputArbiter mBatchInputArbiter;
     private final GestureStrokeDrawingPoints mGestureStrokeDrawingPoints;
@@ -993,6 +997,13 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
     }
 
     private void onMoveEventInternal(final int x, final int y, final long eventTime) {
+        // --- التعديل الثاني: توجيه الحركة للمؤشر لو إحنا في وضع التاتش باد ---
+        if (mSpaceTouchpadMode) {
+            mTouchpadHandler.enableTouchpadMove(x, y, sListener);
+            return;
+        }
+        // ---------------------------------------------------------------------
+
         final Key oldKey = mCurrentKey;
 
         // todo (later): move key swipe stuff to KeyboardActionListener (and finally extend it)
@@ -1066,6 +1077,17 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
 
     private void onUpEventInternal(final int x, final int y, final long eventTime) {
         sTimerProxy.cancelKeyTimersOf(this);
+        
+        // --- التعديل الثالث: قفل وضع المؤشر لما ترفع صباعك ---
+        if (mSpaceTouchpadMode) {
+            mSpaceTouchpadMode = false;
+            mTouchpadHandler.disableTouchpadMode();
+            setReleasedKeyGraphics(mCurrentKey, true);
+            mCurrentKey = null;
+            return; 
+        }
+        // -----------------------------------------------------
+
         final boolean isInDraggingFinger = mIsInDraggingFinger;
         final boolean isInSlidingKeyInput = mIsInSlidingKeyInput;
         resetKeySelectionByDraggingFinger();
@@ -1161,6 +1183,17 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
             return;
         }
         final int code = key.getCode();
+        
+        // --- التعديل الرابع: تفعيل وضع المؤشر عند الضغط المطول على المسطرة ---
+        if (code == Constants.CODE_SPACE) {
+            sTimerProxy.cancelKeyTimersOf(this);
+            mSpaceTouchpadMode = true;
+            mTouchpadHandler.enableTouchpadMove(mLastX, mLastY, sListener);
+            sListener.onCustomRequest(KeyboardActionListener.CustomAction.PERFORM_HAPTIC);
+            return;
+        }
+        // ---------------------------------------------------------------------
+
         sListener.onLongPressKey(code);
         if (key.hasNoPanelAutoPopupKey()) {
             cancelKeyTracking();
@@ -1220,6 +1253,14 @@ public final class PointerTracker implements PointerTrackerQueue.Element,
 
     private void onCancelEventInternal() {
         sTimerProxy.cancelKeyTimersOf(this);
+        
+        // --- التعديل الخامس: تنظيف الوضع لو حصل إلغاء (زي مكالمة مثلاً) ---
+        if (mSpaceTouchpadMode) {
+            mSpaceTouchpadMode = false;
+            mTouchpadHandler.disableTouchpadMode();
+        }
+        // ------------------------------------------------------------------
+
         setReleasedKeyGraphics(mCurrentKey, true);
         resetKeySelectionByDraggingFinger();
         dismissPopupKeysPanel();
