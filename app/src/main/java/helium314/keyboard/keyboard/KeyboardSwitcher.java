@@ -485,10 +485,6 @@ public final class KeyboardSwitcher {
         return mStripContainer.isShown();
     }
 
-    public EmojiPalettesView getEmojiPalettesView() {
-        return mEmojiPalettesView;
-    }
-
     public View getVisibleKeyboardView() {
         if (isShowingEmojiPalettes()) {
             return mEmojiPalettesView;

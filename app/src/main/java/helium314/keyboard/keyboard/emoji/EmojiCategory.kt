@@ -138,6 +138,8 @@ internal class EmojiCategory(private val context: Context, private val layoutSet
         return null
     }
 
+    fun reloadRecents() = categoryKeyboardMap[getCategoryKeyboardMapKey(Category.RECENTS, 0)]?.loadRecentKeys(categoryKeyboardMap.values)
+
     fun getKeyboard(category: Category, id: Int): DynamicGridKeyboard {
         synchronized(categoryKeyboardMap) {
             val categoryKeyboardMapKey = getCategoryKeyboardMapKey(category, id)

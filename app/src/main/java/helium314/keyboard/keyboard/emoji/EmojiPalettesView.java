@@ -367,22 +367,22 @@ public final class EmojiPalettesView extends LinearLayout
         final KeyDrawParams params = new KeyDrawParams();
         params.updateParams(mEmojiLayoutParams.getBottomRowKeyboardHeight(), keyVisualAttr);
         new EmojiLayoutParams(getResources()).setEmojiListProperties(mPager); // necessary when floating
+        mEmojiCategory.reloadRecents(); // in case recents changed from outside emoji keyboards
         setupSidePadding();
         initDictionaryFacilitator();
     }
 
-    void addRecentKey(final Key key) {
+    private void addRecentKey(Key key) {
         if (Settings.getValues().mIncognitoModeEnabled) {
             // We do not want to log recent keys while being in incognito
             return;
         }
-        if (getVisibility() == VISIBLE && mEmojiCategory.isInRecentTab()) {
+        if (mEmojiCategory.isInRecentTab()) {
             getRecentsKeyboard().addPendingKey(key);
             return;
         }
         getRecentsKeyboard().addKeyFirst(key);
-        if (initialized)
-            mPager.getAdapter().notifyItemChanged(mEmojiCategory.getRecentTabId());
+        mPager.getAdapter().notifyItemChanged(mEmojiCategory.getRecentTabId());
     }
 
     private void setupBottomRowKeyboard(EditorInfo editorInfo, KeyboardActionListener keyboardActionListener) {

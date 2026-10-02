@@ -66,6 +66,7 @@ import helium314.keyboard.latin.define.DebugFlags;
 import helium314.keyboard.latin.inputlogic.InputLogic;
 import helium314.keyboard.latin.personalization.PersonalizationHelper;
 import helium314.keyboard.latin.settings.Settings;
+import helium314.keyboard.latin.settings.SettingsSubtype;
 import helium314.keyboard.latin.settings.SettingsValues;
 import helium314.keyboard.latin.suggestions.SuggestionStripView;
 import helium314.keyboard.latin.suggestions.SuggestionStripViewAccessor;
@@ -817,7 +818,7 @@ public class LatinIME extends InputMethodService implements
     }
 
     @Override
-    public void onCurrentInputMethodSubtypeChanged(final InputMethodSubtype subtype) {
+    public void onCurrentInputMethodSubtypeChanged(InputMethodSubtype subtype) {
         // Note that the calling sequence of onCreate() and onCurrentInputMethodSubtypeChanged()
         // is not guaranteed. It may even be called at the same time on a different thread.
         if (subtype.hashCode() == 0x7000000f) {
@@ -831,6 +832,8 @@ public class LatinIME extends InputMethodService implements
             return;
         }
 
+        if (DebugFlags.DEBUG_ENABLED)
+            Log.d(TAG, "switching to subtype " + SettingsSubtype.Companion.toSettingsSubtype(subtype));
         mSubtypeState.onSubtypeChanged(oldSubtype, subtype);
         StatsUtils.onSubtypeChanged(oldSubtype, subtype);
         mRichImm.onSubtypeChanged(subtype);
@@ -848,14 +851,16 @@ public class LatinIME extends InputMethodService implements
         onCurrentInputMethodSubtypeChanged(subtype);
     }
 
-    private void onStartInputInternal(final EditorInfo editorInfo, final boolean restarting) {
+    private void onStartInputInternal(EditorInfo editorInfo, boolean restarting) {
         super.onStartInput(editorInfo, restarting);
 
-        final RichInputMethodSubtype subtypeForApp = editorInfo == null
+        RichInputMethodSubtype subtypeForApp = editorInfo == null
             ? null :
             mSettings.getSubtypeForApp(editorInfo.packageName);
-        final List<Locale> hintLocales = EditorInfoCompatUtils.getHintLocales(editorInfo);
-        final InputMethodSubtype subtypeForLocales = mSubtypeState.getSubtypeForLocales(mRichImm, hintLocales, subtypeForApp);
+        List<Locale> hintLocales = EditorInfoCompatUtils.getHintLocales(editorInfo);
+        InputMethodSubtype subtypeForLocales = mSubtypeState.getSubtypeForLocales(mRichImm, hintLocales, subtypeForApp);
+        if (DebugFlags.DEBUG_ENABLED)
+            Log.d(TAG, "onStartInputInternal: hint locales " + hintLocales + ", found matching subtype: " + (subtypeForLocales != null));
         if (subtypeForLocales != null) {
             // found a better subtype using hint locales and saved-per-app subtype, that we should switch to.
             mHandler.postSwitchLanguage(subtypeForLocales);
@@ -1230,7 +1235,7 @@ public class LatinIME extends InputMethodService implements
                 touchLeft = xy.component1();
                 touchTop = xy.component2();
                 touchRight = touchLeft + mSettings.getCurrent().mFloatingWidth;
-                touchBottom = touchTop + mSettings.getCurrent().mFloatingHeight + stripHeight + (int)FloatingKeyboardUtils.getFloatingHandleHeight(getResources());
+                touchBottom = touchTop + inputHeight;
             }
             outInsets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_REGION;
             outInsets.touchableRegion.set(touchLeft, touchTop, touchRight, touchBottom);

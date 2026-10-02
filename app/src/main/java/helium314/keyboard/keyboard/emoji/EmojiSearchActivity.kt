@@ -82,7 +82,6 @@ import helium314.keyboard.keyboard.KeyboardTheme
 import helium314.keyboard.keyboard.KeyboardTypeface
 import helium314.keyboard.keyboard.internal.KeyboardBuilder
 import helium314.keyboard.keyboard.internal.KeyboardParams
-import helium314.keyboard.keyboard.internal.ShiftMode
 import helium314.keyboard.keyboard.internal.keyboard_parser.EMOJI_HINT_LABEL
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode
 import helium314.keyboard.keyboard.internal.keyboard_parser.getCode
@@ -91,7 +90,6 @@ import helium314.keyboard.keyboard.internal.keyboard_parser.getEmojiKeyDimension
 import helium314.keyboard.keyboard.internal.keyboard_parser.getEmojiNeutralVersion
 import helium314.keyboard.keyboard.internal.keyboard_parser.getEmojiPopupSpec
 import helium314.keyboard.keyboard.internal.keyboard_parser.loadEmojiDefaultVersionsAndPopupSpecs
-import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.RichInputMethodManager
 import helium314.keyboard.latin.RichInputMethodSubtype
@@ -273,8 +271,9 @@ class EmojiSearchActivity : ComponentActivity() {
         val intent = Intent(EMOJI_SEARCH_DONE_ACTION).setPackage(packageName)
             .putExtra(IME_CLOSED_KEY, imeClosed)
         pressedKey?.let {
-            intent.putExtra(EMOJI_KEY, getEmoji(it))
-            KeyboardSwitcher.getInstance().emojiPalettesView.addRecentKey(it)
+            val emoji = getEmoji(it) ?: return@let
+            intent.putExtra(EMOJI_KEY, emoji)
+            RecentEmojis.add(emoji)
         }
         sendBroadcast(intent)
         super.onStop()
