@@ -7,9 +7,6 @@
 package helium314.keyboard.keyboard;
 
 import android.annotation.SuppressLint;
-import android.animation.Animator;
-import android.animation.AnimatorListenerAdapter;
-import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
@@ -95,10 +92,6 @@ public final class KeyboardSwitcher {
     private int mCurrentOrientation;
     private int mCurrentDpi;
     private boolean mThemeNeedsReload;
-
-    private ValueAnimator mEmojiHeightAnimator;
-    private ValueAnimator mClipboardHeightAnimator;
-    private static final int ANIMATION_DURATION_MS = 250;
 
     @SuppressLint("StaticFieldLeak") // this is a keyboard, we want to keep it alive in background
     private static final KeyboardSwitcher sInstance = new KeyboardSwitcher();
@@ -241,21 +234,14 @@ public final class KeyboardSwitcher {
     private void setMainKeyboardFrame(
             @NonNull final SettingsValues settingsValues,
             @NonNull final KeyboardSwitchState toggleState) {
-
-        if (mEmojiPalettesView != null && mEmojiPalettesView.getVisibility() == View.VISIBLE) {
-            animateViewHeight(mEmojiPalettesView, false, settingsValues, toggleState);
-            return;
-        }
-        if (mClipboardHistoryView != null && mClipboardHistoryView.getVisibility() == View.VISIBLE) {
-            animateViewHeight(mClipboardHistoryView, false, settingsValues, toggleState);
-            return;
-        }
-
         final int visibility = isImeSuppressedByHardwareKeyboard(settingsValues, toggleState) ? View.GONE : View.VISIBLE;
         final int stripVisibility = mLatinIME.hasSuggestionStripView()? View.VISIBLE : View.GONE;
         mStripContainer.setVisibility(stripVisibility);
         PointerTracker.switchTo(mKeyboardView);
         mKeyboardView.setVisibility(visibility);
+        // The visibility of {@link #mKeyboardView} must be aligned with {@link #MainKeyboardFrame}.
+        // @see #getVisibleKeyboardView() and
+        // @see LatinIME#onComputeInset(android.inputmethodservice.InputMethodService.Insets)
         mMainKeyboardFrame.setVisibility(visibility);
         mKeyboardViewWrapper.setVisibility(Settings.getInstance().readShowToolbarOnly() ? View.GONE : View.VISIBLE);
         mEmojiPalettesView.setVisibility(View.GONE);
@@ -332,6 +318,8 @@ public final class KeyboardSwitcher {
                 mMainKeyboardFrame.setVisibility(View.VISIBLE);
                 mKeyboardView.setVisibility(View.VISIBLE);
                 if (toggleState == KeyboardSwitchState.SYMBOLS_SHIFTED)
+                    // possible other states OTHER and HIDDEN have keyboardElement null, which we just ignore
+                    // might need to be adjusted when functionality is extended
                     mState.setLayout(LayoutDirective.Utility.SYMBOLS_SHIFTED);
             }
         }
@@ -352,6 +340,7 @@ public final class KeyboardSwitcher {
         mKeyboardViewWrapper.setOneHandedModeEnabled(enabled);
         mKeyboardViewWrapper.setOneHandedGravity(settings.getCurrent().mOneHandedModeGravity);
 
+        // oneHandeMode is always disabled when floating, and we shouldn't mess up the setting
         if (enabled != settings.getCurrent().mOneHandedModeEnabled)
             settings.writeOneHandedModeEnabled(enabled);
         reloadKeyboard();
@@ -376,6 +365,7 @@ public final class KeyboardSwitcher {
     }
 
     public void reloadMainKeyboard() {
+        // Reload the entire keyboard, and switch to the previous layout
         final boolean wasEmoji = isShowingEmojiPalettes();
         final boolean wasClipboard = isShowingClipboardHistory();
         loadKeyboard(mLatinIME.getCurrentInputEditorInfo(), Settings.getValues(),
@@ -387,7 +377,14 @@ public final class KeyboardSwitcher {
         }
     }
 
+    /**
+     * Displays a toast message.
+     *
+     * @param text The text to display in the toast message.
+     * @param briefToast If true, the toast duration will be short; otherwise, it will last longer.
+     */
     public void showToast(final String text, final boolean briefToast){
+        // In API 32 and below, toasts can be shown without a notification permission.
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
             final int toastLength = briefToast ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG;
             final Toast toast = Toast.makeText(mLatinIME, text, toastLength);
@@ -403,6 +400,7 @@ public final class KeyboardSwitcher {
         return Settings.getValues().isSecondaryStripVisible()? View.VISIBLE : View.GONE;
     }
 
+    // Displays a toast-like message with the provided text for a specified duration.
     private void showFakeToast(final String text, final int timeMillis) {
         if (mFakeToastView.getVisibility() == View.VISIBLE) return;
 
@@ -444,6 +442,9 @@ public final class KeyboardSwitcher {
         }
     }
 
+    /**
+     * Updates state machine to figure out when to automatically switch back to the previous mode.
+     */
     public void onEvent(final Event event, final int currentAutoCapsState,
             @Nullable final RecapitalizeMode currentRecapitalizeState) {
         mState.onEvent(event, currentAutoCapsState, currentRecapitalizeState);
@@ -454,7 +455,7 @@ public final class KeyboardSwitcher {
             return false;
         }
         final Keyboard keyboard = mKeyboardView.getKeyboard();
-        if (keyboard == null)
+        if (keyboard == null) // may happen when using hardware keyboard
             return false;
         KeyboardElement activeKeyboardId = keyboard.mId.getElement();
         for (KeyboardElement keyboardElement : keyboardElements) {
@@ -542,7 +543,7 @@ public final class KeyboardSwitcher {
             prefs.unregisterOnSharedPreferenceChangeListener(mSuggestionStripView);
         if (mClipboardHistoryView != null)
             prefs.unregisterOnSharedPreferenceChangeListener(mClipboardHistoryView);
-        if (mThemeNeedsReload)
+        if (mThemeNeedsReload) // necessary in some cases (e.g. theme switch) when mThemeNeedsReload is set before first keyboard load
             Settings.getInstance().loadSettings(displayContext, Settings.getValues().mLocale, Settings.getValues().mInputAttributes);
 
         updateKeyboardThemeAndContextThemeWrapper(displayContext, KeyboardTheme.getKeyboardTheme(displayContext));
@@ -593,76 +594,29 @@ public final class KeyboardSwitcher {
         mLatinIME.switchToSubtype(subtype);
     }
 
+    // used for debug
     public String getLocaleAndConfidenceInfo() {
         return mLatinIME.getLocaleAndConfidenceInfo();
     }
 
+    /** Marks the theme as outdated. The theme will be reloaded next time the keyboard is shown.
+     *  If the keyboard is currently showing, theme will be reloaded immediately. */
     public void setThemeNeedsReload() {
         mThemeNeedsReload = true;
         if (mLatinIME == null || !mLatinIME.isInputViewShown())
-            return;
+            return; // will be reloaded right before showing IME
 
+        // Hide and show IME, showing will trigger the reload.
+        // Reloading while IME is shown is glitchy, and hiding / showing is so fast the user shouldn't notice.
         mLatinIME.hideWindow();
         try {
             mLatinIME.showWindow(true);
         } catch (IllegalStateException e) {
+            // in tests isInputViewShown returns true, but showWindow throws "IllegalStateException: Window token is not set yet."
         }
     }
 
-    private void animateViewHeight(@NonNull View view, boolean expanding, SettingsValues settingsValues, KeyboardSwitchState toggleState) {
-        if (view == null || view.getLayoutParams() == null) return;
-        ViewGroup.LayoutParams params = view.getLayoutParams();
-
-        ValueAnimator animator = (view == mEmojiPalettesView) ? mEmojiHeightAnimator : mClipboardHeightAnimator;
-        if (animator != null && animator.isRunning()) animator.cancel();
-
-        int startHeight = view.getHeight();
-        int endHeight = expanding ? calculateExpandedHeight(view) : calculateNormalHeight(view);
-
-        if (startHeight == endHeight || startHeight == 0) { 
-             if (!expanding && settingsValues != null && toggleState != null) {
-                  view.setVisibility(View.GONE);
-                  setMainKeyboardFrame(settingsValues, toggleState);
-             }
-             return;
-        }
-
-        ValueAnimator newAnimator = ValueAnimator.ofInt(startHeight, endHeight);
-        newAnimator.setDuration(ANIMATION_DURATION_MS);
-
-        if (view == mEmojiPalettesView) mEmojiHeightAnimator = newAnimator;
-        else mClipboardHeightAnimator = newAnimator;
-
-        newAnimator.addUpdateListener(animation -> {
-            params.height = (int) animation.getAnimatedValue();
-            view.setLayoutParams(params);
-            view.requestLayout();
-        });
-
-        newAnimator.addListener(new AnimatorListenerAdapter() {
-            @Override
-            public void onAnimationEnd(Animator animation) {
-                if (!expanding && settingsValues != null && toggleState != null) {
-                    view.setVisibility(View.GONE); 
-                    setMainKeyboardFrame(settingsValues, toggleState);
-                }
-            }
-        });
-
-        newAnimator.start();
-    }
-
-    private int calculateExpandedHeight(@NonNull View view) {
-        if (mThemeContext == null) return view.getHeight();
-        int screenHeight = mThemeContext.getResources().getDisplayMetrics().heightPixels;
-        return (int)(screenHeight * 0.60f);
-    }
-
-    private int calculateNormalHeight(@NonNull View view) {
-        if (mThemeContext == null) return view.getHeight();
-        return ResourceUtils.getSecondaryKeyboardHeight(mThemeContext.getResources(), Settings.getValues());
-    }
-
+    // private SwitchActions implementation so e.g. setEmojiKeyboard can only be called via KeyboardState (avoid inconsistencies!)
     private class SwitchActions implements KeyboardState.SwitchActions {
         @Override
         public void setAlphabetKeyboard(@NonNull ShiftMode shiftMode) {
@@ -694,6 +648,9 @@ public final class KeyboardSwitcher {
                 Log.d(TAG, "setEmojiKeyboard");
             }
             mMainKeyboardFrame.setVisibility(View.VISIBLE);
+            // The visibility of {@link #mKeyboardView} must be aligned with {@link #MainKeyboardFrame}.
+            // @see #getVisibleKeyboardView() and
+            // @see LatinIME#onComputeInset(android.inputmethodservice.InputMethodService.Insets)
             mKeyboardView.setVisibility(View.GONE);
             mSuggestionStripView.setVisibility(View.GONE);
             mStripContainer.setVisibility(getSecondaryStripVisibility());
@@ -703,8 +660,6 @@ public final class KeyboardSwitcher {
             mEmojiPalettesView.startEmojiPalettes(mKeyboardView.getKeyVisualAttribute(),
                 mLatinIME.getCurrentInputEditorInfo(), mLatinIME.mKeyboardActionListener);
             mEmojiPalettesView.setVisibility(View.VISIBLE);
-
-            KeyboardSwitcher.this.animateViewHeight(mEmojiPalettesView, true, null, null);
         }
 
         @Override
@@ -713,6 +668,9 @@ public final class KeyboardSwitcher {
                 Log.d(TAG, "setClipboardKeyboard");
             }
             mMainKeyboardFrame.setVisibility(View.VISIBLE);
+            // The visibility of {@link #mKeyboardView} must be aligned with {@link #MainKeyboardFrame}.
+            // @see #getVisibleKeyboardView() and
+            // @see LatinIME#onComputeInset(android.inputmethodservice.InputMethodService.Insets)
             mKeyboardView.setVisibility(View.GONE);
             mEmojiTabStripView.setVisibility(View.GONE);
             mSuggestionStripView.setVisibility(View.GONE);
@@ -723,8 +681,6 @@ public final class KeyboardSwitcher {
             mClipboardHistoryView.startClipboardHistory(mLatinIME.getClipboardHistoryManager(), mKeyboardView.getKeyVisualAttribute(),
                 mLatinIME.getCurrentInputEditorInfo(), mLatinIME.mKeyboardActionListener);
             mClipboardHistoryView.setVisibility(View.VISIBLE);
-
-            KeyboardSwitcher.this.animateViewHeight(mClipboardHistoryView, true, null, null);
         }
 
         @Override
@@ -779,6 +735,7 @@ public final class KeyboardSwitcher {
         @Override
         public void setFloatingKeyboardEnabled(boolean enabled) {
             if (enabled != Settings.getValues().mIsFloatingKeyboard)
+                // mIsFloatingKeyboard is always disabled when device is locked, and we shouldn't mess up the setting
                 SettingsKt.setFloatingKeyboardEnabled(mThemeContext, enabled);
             if (enabled) FloatingKeyboardUtils.setFloating(mCurrentInputView);
             else FloatingKeyboardUtils.disableFloating(mCurrentInputView);
@@ -794,11 +751,15 @@ public final class KeyboardSwitcher {
             return keyboardView != null && keyboardView.popDoubleTapShiftKeyTimer();
         }
 
+        // not a SwitchAction, but should only be called from a SwitchAction to avoid inconsistent state / actual layout
         private void setKeyboard(KeyboardElement keyboardElement, @NonNull KeyboardSwitchState toggleState) {
+            // with a hardware keyboard we might get here without ever calling onCreateInputView, so don't crash
             if (mKeyboardView == null) return;
 
+            // Make {@link MainKeyboardView} visible and hide {@link EmojiPalettesView}.
             SettingsValues currentSettingsValues = Settings.getValues();
             setMainKeyboardFrame(currentSettingsValues, toggleState);
+            // TODO: pass this object to setKeyboard instead of getting the current values.
             MainKeyboardView keyboardView = mKeyboardView;
             Keyboard oldKeyboard = keyboardView.getKeyboard();
             Keyboard newKeyboard = mKeyboardLayoutSet.getKeyboard(keyboardElement);
